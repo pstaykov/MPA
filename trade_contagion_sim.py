@@ -88,9 +88,9 @@ def build_networks():
     Gb = nx.barabasi_albert_graph(N, 4, seed=11)
     pb = normalise(nx.spring_layout(Gb, seed=5, iterations=200, k=0.05))
     return [
-        dict(name="Square lattice", G=Gl, pos=pl, edges=el),
+        dict(name="Quadratgitter", G=Gl, pos=pl, edges=el),
         dict(name="Erdős–Rényi", G=Ge, pos=pe, edges=list(Ge.edges())),
-        dict(name="Scale-free (Barabási–Albert)", G=Gb, pos=pb,
+        dict(name="Skalenfrei (Barabási–Albert)", G=Gb, pos=pb,
              edges=list(Gb.edges())),
     ]
 
@@ -197,9 +197,9 @@ def main():
     # legend
     handles = [
         Line2D([], [], marker="o", ls="none", markersize=9, markerfacecolor=OWN, markeredgecolor=OWN,
-               label="Trade from own decision"),
+               label="Handel aus eigener Entscheidung"),
         Line2D([], [], marker="o", ls="-", lw=1.6, markersize=9, color=FOL,
-               label="Trade copied from neighbour"),
+               label="Vom Nachbarn kopierter Handel"),
     ]
     fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=18,
                bbox_to_anchor=(0.5, 0.02), handlelength=2.2, columnspacing=3)
