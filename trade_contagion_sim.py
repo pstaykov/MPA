@@ -18,7 +18,7 @@ Model (as in the paper):
 Visual-only change: the source-order rate is lowered so individual trades and
 cascades can be followed by eye. q, lambda_f and the networks are unchanged.
 
-Output: trade_contagion.mp4 and trade_contagion.gif next to this script.
+Output: trade_contagion.mp4 next to this script.
 """
 
 import heapq
@@ -44,20 +44,19 @@ Q = N / (4 * M)              # spreading probability (paper: q = N / 4M)
 DELAY_MEAN = 1000.0          # follower delay, paper lambda_f = 1000
 FPS = 30
 FRAME_DT = 150.0             # model time units per video frame
-INTRO_S, SIM_S, OUTRO_S = 4, 30, 3
+INTRO_S, SIM_S, OUTRO_S = 1, 30, 2
 SOURCES_PER_S = 1.6          # own-decision trades per second per network (visual)
 HUB_EVENT_S = 7.0            # when the best-connected trader acts on its own
 MAX_TRADES = 60000
 
 W, H, DPI = 1920, 1080, 100
 
-BG = "#0b0f17"
-EDGE = "#9aa7bd"
-NODE = "#3a4558"
-OWN = "#ffb020"              # own-decision trade
-FOL = "#22d3ee"              # trade copied from a neighbour
-TXT = "#e6ebf2"
-MUTED = "#8a96a8"
+BG = "white"
+EDGE = "#b0b0b0"
+NODE = "#9a9a9a"
+OWN = "#D55E00"              # own-decision trade
+FOL = "#0072B2"              # trade copied from a neighbour
+TXT = "black"
 
 
 # ---------------------------------------------------------------- networks
@@ -89,9 +88,9 @@ def build_networks():
     Gb = nx.barabasi_albert_graph(N, 4, seed=11)
     pb = normalise(nx.spring_layout(Gb, seed=5, iterations=200, k=0.05))
     return [
-        dict(name="Square lattice", sub="every trader has 8 neighbours", G=Gl, pos=pl, edges=el),
-        dict(name="Erdős–Rényi random", sub="Poisson degrees, no hubs", G=Ge, pos=pe, edges=list(Ge.edges())),
-        dict(name="Scale-free (Barabási–Albert)", sub="a few hubs with ~100 neighbours", G=Gb, pos=pb,
+        dict(name="Square lattice", G=Gl, pos=pl, edges=el),
+        dict(name="Erdős–Rényi", G=Ge, pos=pe, edges=list(Ge.edges())),
+        dict(name="Scale-free (Barabási–Albert)", G=Gb, pos=pb,
              edges=list(Gb.edges())),
     ]
 
@@ -164,88 +163,55 @@ def main():
         print(f"{net['name']}: {len(tr)} trades, hub cascade {sz[hc]}, max cascade {max(sz.values())}")
 
     fig = plt.figure(figsize=(W / DPI, H / DPI), dpi=DPI, facecolor=BG)
-    fig.text(0.5, 0.955, "Copy-trading contagion on three trader networks",
-             ha="center", va="center", color=TXT, fontsize=26, weight="bold")
-    fig.text(0.5, 0.918,
-             f"N = {N} traders, ⟨k⟩ = 8, copy probability q = N/4M = {Q:.4f}, same rules on every network"
-             "  ·  after Wilinski & Kanniainen, arXiv:2508.20672",
-             ha="center", va="center", color=MUTED, fontsize=13)
 
-    col_x = [0.03, 0.355, 0.68]
-    col_w = 0.29
-    n_bins = SIM_S * 2  # half-second bins
+    col_x = [0.02, 0.35, 0.68]
+    col_w = 0.30
     for k, net in enumerate(nets):
-        ax = fig.add_axes([col_x[k], 0.30, col_w, 0.56], facecolor=BG)
+        ax = fig.add_axes([col_x[k], 0.12, col_w, 0.74], facecolor=BG)
         ax.set_xlim(-0.03, 1.03); ax.set_ylim(-0.03, 1.03); ax.axis("off")
         if k == 0:
-            ax.set_ylim(-0.27, 0.88)
+            ax.set_ylim(-0.05, 0.65)
+        ax.set_aspect("equal", adjustable="datalim")
         pos = net["pos"]
         P = np.array([pos[i] for i in range(N)])
         segs = [(pos[u], pos[v]) for u, v in net["edges"]]
         ax.add_collection(LineCollection(segs, colors=EDGE, linewidths=0.35,
-                                         alpha=0.10 if k else 0.22, zorder=1))
+                                         alpha=0.25 if k else 0.5, zorder=1))
         deg = np.array([net["G"].degree(i) for i in range(N)])
-        base = 5 + 2.2 * (deg - 2) if k == 2 else np.full(N, 9.0 if k == 0 else 3 + 1.4 * deg)
-        if k == 2:
+        if k == 0:
+            base = np.full(N, 9.0)
+        elif k == 1:
+            base = 3 + 1.4 * deg
+        else:
             base = 4 + 0.9 * deg ** 1.25
         ax.scatter(P[:, 0], P[:, 1], s=base, c=NODE, linewidths=0, zorder=2)
-        fig.text(col_x[k] + col_w / 2, 0.875, net["name"], ha="center", color=TXT, fontsize=18, weight="bold")
-        fig.text(col_x[k] + col_w / 2, 0.85, net["sub"], ha="center", color=MUTED, fontsize=12)
-
-        bx = fig.add_axes([col_x[k] + 0.01, 0.105, col_w - 0.02, 0.15], facecolor=BG)
-        bx.set_xlim(0, SIM_S); bx.set_ylim(0, 1)
-        for s in ("top", "right"):
-            bx.spines[s].set_visible(False)
-        for s in ("left", "bottom"):
-            bx.spines[s].set_color("#334")
-        bx.tick_params(colors=MUTED, labelsize=9)
-        bx.set_xlabel("seconds", color=MUTED, fontsize=9, labelpad=1)
-        bx.set_ylabel("trades / 0.5 s", color=MUTED, fontsize=9)
-        bx.axvline(HUB_EVENT_S, color="#556", lw=0.8, ls="--")
-        x = np.arange(n_bins) / 2
-        b_own = bx.bar(x, np.zeros(n_bins), width=0.5, align="edge", color=OWN, linewidth=0)
-        b_fol = bx.bar(x, np.zeros(n_bins), width=0.5, align="edge", color=FOL, linewidth=0)
+        fig.text(col_x[k] + col_w / 2, 0.92, net["name"], ha="center", va="center", color=TXT, fontsize=22)
 
         tt = np.array([t for t, *_ in net["trades"]])
-        own = np.array([o for _, _, o, _, _ in net["trades"]], bool)
-        frame_of = (tt / FRAME_DT).astype(int)
-        net.update(ax=ax, bx=bx, P=P, base=base, b_own=b_own, b_fol=b_fol,
-                   tt=tt, own=own, frame_of=frame_of,
+        net.update(ax=ax, P=P, base=base,
+                   own=np.array([o for _, _, o, _, _ in net["trades"]], bool),
+                   frame_of=(tt / FRAME_DT).astype(int),
                    node=np.array([n for _, n, *_ in net["trades"]]),
-                   parent=np.array([p for _, _, _, p, _ in net["trades"]]),
-                   bin_own=np.histogram(tt[own] / (FPS * FRAME_DT), bins=n_bins, range=(0, SIM_S))[0],
-                   bin_fol=np.histogram(tt[~own] / (FPS * FRAME_DT), bins=n_bins, range=(0, SIM_S))[0])
-    ymax = max(max((n["bin_own"] + n["bin_fol"]).max() for n in nets), 5) * 1.1
-    for n in nets:
-        n["bx"].set_ylim(0, ymax)
+                   parent=np.array([p for _, _, _, p, _ in net["trades"]]))
 
     # legend
-    lg = fig.add_axes([0.0, 0.0, 1, 0.06], facecolor=BG); lg.axis("off")
-    lg.set_xlim(0, 1); lg.set_ylim(0, 1)
-    lg.scatter([0.19], [0.5], s=260, facecolors="none", edgecolors=OWN, linewidths=2)
-    lg.scatter([0.19], [0.5], s=50, c=OWN)
-    lg.text(0.205, 0.5, "trade from the trader's OWN decision (source order)", color=TXT, va="center", fontsize=14)
-    lg.plot([0.53, 0.56], [0.5, 0.5], color=FOL, lw=2)
-    lg.scatter([0.56], [0.5], s=50, c=FOL)
-    lg.text(0.572, 0.5, "trade COPIED from a neighbour (line = who it was copied from)",
-            color=TXT, va="center", fontsize=14)
+    handles = [
+        Line2D([], [], marker="o", ls="none", markersize=9, markerfacecolor=OWN, markeredgecolor=OWN,
+               label="Trade from own decision"),
+        Line2D([], [], marker="o", ls="-", lw=1.6, markersize=9, color=FOL,
+               label="Trade copied from neighbour"),
+    ]
+    fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=18,
+               bbox_to_anchor=(0.5, 0.02), handlelength=2.2, columnspacing=3)
 
     # dynamic artists
-    for k, net in enumerate(nets):
+    for net in nets:
         ax = net["ax"]
         net["glow"] = ax.scatter(net["P"][:, 0], net["P"][:, 1], s=np.zeros(N), c=np.zeros((N, 4)),
                                  linewidths=0, zorder=4)
-        net["rings"] = ax.scatter([], [], s=[], facecolors="none", edgecolors=OWN, linewidths=2.6, zorder=5)
-        net["traces"] = LineCollection([], linewidths=1.4, zorder=3)
+        net["rings"] = ax.scatter([], [], s=[], facecolors="none", edgecolors=OWN, linewidths=2.0, zorder=5)
+        net["traces"] = LineCollection([], linewidths=1.3, zorder=3)
         ax.add_collection(net["traces"])
-        net["count"] = fig.text(col_x[k] + col_w / 2, 0.285, "", ha="center", va="top", color=TXT, fontsize=13)
-        net["banner"] = fig.text(col_x[k] + col_w / 2, 0.815, "", ha="center", va="center",
-                                 fontsize=15, weight="bold", color=OWN)
-        net["hub_mark"] = ax.scatter([net["P"][net["hub"], 0]], [net["P"][net["hub"], 1]], s=[0],
-                                     facecolors="none", edgecolors="white", linewidths=1.5, zorder=6)
-    clock = fig.text(0.985, 0.955, "", ha="right", va="center", color=MUTED, fontsize=13, family="monospace")
-    intro = fig.text(0.5, 0.58, "", ha="center", va="center", color=TXT, fontsize=22,
-                     bbox=dict(facecolor=BG, edgecolor="#334", boxstyle="round,pad=0.8", alpha=0.92))
 
     own_rgb = np.array(matplotlib.colors.to_rgb(OWN))
     fol_rgb = np.array(matplotlib.colors.to_rgb(FOL))
@@ -255,26 +221,17 @@ def main():
     mp4 = os.path.join(OUT_DIR, "trade_contagion.mp4")
     proc = subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba",
                              "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264",
-                             "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "medium", mp4],
+                             "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium", mp4],
                             stdin=subprocess.PIPE)
 
     intro_f, total_f = INTRO_S * FPS, (INTRO_S + SIM_S + OUTRO_S) * FPS
     for f in range(total_f):
         sf = min(max(f - intro_f, -1), sim_frames - 1)  # simulation frame (-1 = not started)
-        intro.set_text("Every trader sometimes trades on their own.\n"
-                       "Each neighbour copies that trade with probability q,\n"
-                       "and passes it on to its own neighbours."
-                       if f < intro_f else "")
-        intro.set_visible(f < intro_f)
-        clock.set_text(f"t = {max(sf, 0) / FPS:5.1f} s" if sf >= 0 else "")
         for net in nets:
             if sf < 0:
-                net["glow"].set_sizes(np.zeros(N)); net["rings"].set_offsets(np.empty((0, 2)))
-                net["traces"].set_segments([]); net["count"].set_text("")
                 continue
             fo = net["frame_of"]
-            window = (fo <= sf) & (fo > sf - 3 * TAU_OWN)
-            idx = np.nonzero(window)[0]
+            idx = np.nonzero((fo <= sf) & (fo > sf - 3 * TAU_OWN))[0]
             a_own, a_fol = np.zeros(N), np.zeros(N)
             for i in idx:
                 age = sf - fo[i]
@@ -284,8 +241,7 @@ def main():
                     a_fol[net["node"][i]] = max(a_fol[net["node"][i]], np.exp(-age / TAU_FOL))
             amp = np.maximum(a_own, a_fol)
             col = np.zeros((N, 4))
-            use_own = a_own >= a_fol
-            col[:, :3] = np.where(use_own[:, None], own_rgb, fol_rgb)
+            col[:, :3] = np.where((a_own >= a_fol)[:, None], own_rgb, fol_rgb)
             col[:, 3] = np.clip(amp * 1.2, 0, 1)
             net["glow"].set_facecolors(col)
             net["glow"].set_sizes(amp * (net["base"] * 3 + 40))
@@ -306,51 +262,12 @@ def main():
                 lc[:, 3] = 0.9 * (1 - np.array([sf - fo[i] for i in li]) / TAU_LINE)
             net["traces"].set_segments(segs); net["traces"].set_colors(lc)
 
-            done = fo <= sf
-            n_own, n_fol = int((done & net["own"]).sum()), int((done & ~net["own"]).sum())
-            net["count"].set_text(f"own decisions: {n_own}    copied from neighbour: {n_fol}")
-
-            cur_bin = sf // (FPS // 2)
-            for b in range(len(net["b_own"])):
-                o = net["bin_own"][b] if b < cur_bin else 0
-                fl = net["bin_fol"][b] if b < cur_bin else 0
-                net["b_own"][b].set_height(o)
-                net["b_fol"][b].set_y(o); net["b_fol"][b].set_height(fl)
-
-            hs = sf / FPS - HUB_EVENT_S
-            if -1.5 < hs < 0:
-                net["hub_mark"].set_sizes([400 + 300 * np.sin(hs * 8) ** 2])
-            elif 0 <= hs < 2.5:
-                net["hub_mark"].set_sizes([400 * (1 - hs / 2.5)])
-            else:
-                net["hub_mark"].set_sizes([0])
-            if -1.5 < hs < 3.5:
-                net["banner"].set_text("most-connected trader trades on own decision")
-                net["banner"].set_color(OWN)
-            elif hs >= 3.5:
-                recent = (fo <= sf) & (fo > sf - 2 * FPS) & ~net["own"]
-                rate = recent.sum() / 2
-                if rate > 40:
-                    net["banner"].set_text(f"CONTAGION: {rate:.0f} copied trades / s"); net["banner"].set_color("#ff5470")
-                elif net is nets[2] and n_fol > 500:
-                    net["banner"].set_text("contagion burnt out"); net["banner"].set_color(MUTED)
-                else:
-                    net["banner"].set_text("cascades die out quickly"); net["banner"].set_color(MUTED)
-            else:
-                net["banner"].set_text("")
-
         fig.canvas.draw()
         proc.stdin.write(fig.canvas.buffer_rgba().tobytes())
         if f % 150 == 0:
             print(f"frame {f}/{total_f}")
     proc.stdin.close(); proc.wait()
-
-    gif = os.path.join(OUT_DIR, "trade_contagion.gif")
-    vf = "fps=15,scale=1280:-1:flags=lanczos"
-    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", mp4, "-vf",
-                    f"{vf},split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];"
-                    f"[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle", gif], check=True)
-    print("wrote", mp4, "and", gif)
+    print("wrote", mp4)
 
 
 if __name__ == "__main__":
